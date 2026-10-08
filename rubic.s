@@ -1,46 +1,6 @@
-# rubic.s (Ripes build: RENDER=0, SELFTEST=0) -- RV32I-only IDA* solver for the 2x2x2 cube (R/B/D, 7 free corners).
-#
-# Input : input_state, 14 ASCII chars: 7 permutation digits '1'..'7'
-# followed by 7 orientation digits '1'..'3' (same format as solver.c).
-# Output: optimal move sequence, e.g. "B' R' D2 R' B R B' R D2 B R'\n";
-# a solved cube prints an empty line.
-# Checks: every returned path is replayed from its start state and must reach
-# rank (0,0); otherwise "verify failed" is printed.
-#
-# Build switches (assemble-time; the measured CLI build is RENDER=0, SELFTEST=0):
-# RENDER   1 = draw the cube on LED_MATRIX_0 (35 x 25) after every move.
-# Ripes' CLI has no I/O peripherals, so keep 0 for --iret.
-# SELFTEST 1 = solve the built-in test_cases instead of input_state and
-# check each solution length against the stored exact distance;
-# prints "ok"/"FAIL" per case and a final verdict.
-# DELAY    busy-wait iterations after each LED frame (RENDER only).
-# The RENDER=0 and RENDER=1 builds differ only in the renderer.
-#
-# Only RV32I base instructions are used: no mul/div/rem, no helper calls.
-# Every index is built from shifts and adds; the per-face strides
-# (5040 and 729 half-words) are walked by pointer increments, never multiplied.
-#
-# Search state lives in registers; memory is touched only on descend/backtrack.
-# s0  perm_move base (face R)          s1  orient_move base (face R)
-# s2  perm_dist base                   s3  orient_dist base
-# s4  lim = bound - (d + 1)            s5  depth d / path length
-# s6  &frame[d]                        s7  p of current node
-# s8  o of current node                s9  p of current child
-# s10 o of current child               s11 end of perm_move (s0 + 3*10080)
-# a0  turn (0 = X, 1 = X2, 2 = X')     a1  parent face (perm table ptr, 0 at root)
-# a2  current face, perm table ptr     a3  current face, orient table ptr
-# a4  IDA* bound                       a5/a6 start p/o
-# t5  constant 2                       t6  constant 10080 (= 5040 * 2 bytes)
-#
-# frame[d] layout, 32 bytes:
-# 0 a2   4 a3   8 a1   12 p(h)  14 o(h)  16 cp(h)  18 co(h)  20 turn(b)
-#
-# Test case record, 16 bytes: 14 state chars, exact distance (255 = unknown,
-# length not checked), pad.
-#
     .equ MAXD, 11
-    .equ PSTRIDE, 10080        # bytes per face in perm_move
-    .equ OSTRIDE, 1458         # bytes per face in orient_move
+    .equ PSTRIDE, 10080
+    .equ OSTRIDE, 1458
     .equ FRAME, 32
     .equ NTESTS, 6
 
@@ -50,14 +10,14 @@ main:
     la      t0, input_state
     li      t1, 1
 cases_ready:
-    sw      t0, 0(t2)                  # vars[0] = current case pointer
-    sw      t1, 4(t2)                  # vars[1] = cases left
-    sw      zero, 8(t2)                # vars[2] = failures
+    sw      t0, 0(t2)
+    sw      t1, 4(t2)
+    sw      zero, 8(t2)
 
 case_loop:
     la      t0, vars
     lw      t0, 0(t0)
-    # ---- Lehmer rank of the permutation: p = p*(7-i) + smaller-to-right ----
+
     addi    t1, t0, 7
     li      s7, 0
     li      t4, 7
@@ -73,7 +33,7 @@ rank_p_inner:
     addi    t3, t3, 1
     j       rank_p_inner
 rank_p_fold:
-    # s7 = s7 * t4 by repeated addition (t4 <= 7, runs once per query)
+
     li      t5, 0
     mv      t6, t4
 rank_p_mul:
@@ -85,7 +45,6 @@ rank_p_mul:
     addi    t4, t4, -1
     bne     t0, t1, rank_p_outer
 
-    # ---- base-3 rank of the first six orientations: o = 3o + digit ----
     li      s8, 0
     addi    t1, t0, 6
 rank_o_loop:
@@ -100,7 +59,6 @@ rank_o_loop:
     mv      a5, s7
     mv      a6, s8
 
-    # ---- constants and table bases ----
     la      s0, perm_move
     la      s1, orient_move
     la      s2, perm_dist
@@ -111,7 +69,6 @@ rank_o_loop:
     add     s11, s11, t6
     li      t5, 2
 
-    # ---- initial bound h0 = max(pd[p], od[o]); h0 == 0 means solved ----
     add     t0, s2, a5
     lbu     a4, 0(t0)
     add     t0, s3, a6
@@ -136,7 +93,7 @@ node_enter:
     mv      a2, s0
     mv      a3, s1
 face_start:
-    beq     a2, a1, face_next          # same face twice in a row: skip
+    beq     a2, a1, face_next
     li      a0, 0
     slli    t0, s7, 1
     add     t0, a2, t0
@@ -147,13 +104,13 @@ face_start:
 eval:
     add     t0, s2, s9
     lbu     t1, 0(t0)
-    bltu    s4, t1, next_turn          # g + h_perm   > bound
+    bltu    s4, t1, next_turn
     add     t0, s3, s10
     lbu     t2, 0(t0)
-    bltu    s4, t2, next_turn          # g + h_orient > bound
+    bltu    s4, t2, next_turn
     or      t0, t1, t2
     beqz    t0, found
-    # descend: spill current node, child becomes current
+
     sw      a2, 0(s6)
     sw      a3, 4(s6)
     sw      a1, 8(s6)
@@ -171,7 +128,7 @@ eval:
     j       node_enter
 
 next_turn:
-    # X -> X2 -> X': one more quarter turn on the child already in hand
+
     beq     a0, t5, face_next
     addi    a0, a0, 1
     slli    t0, s9, 1
@@ -207,14 +164,14 @@ next_bound:
     j       bound_loop
 
 found:
-    # record the final move, path length L = d + 1
+
     sw      a2, 0(s6)
     sw      a3, 4(s6)
     sb      a0, 20(s6)
     addi    s5, s5, 1
 
 verify:
-    # replay every move from the start state; must land on (0, 0)
+
     la      t0, frames
     mv      t1, s5
     mv      t2, a5
@@ -241,32 +198,29 @@ verify_check:
     or      t4, t2, t3
     bnez    t4, verify_fail
 
-
-    # ---- print "F", "F2" or "F'" per move, space-separated ----
-# s9 = &frame[k], s10 = moves left, s4 = face index (0 R, 1 B, 2 D)
     la      s9, frames
     mv      s10, s5
     beqz    s10, print_newline
 print_move:
     lw      t2, 0(s9)
     li      s4, 0
-    li      a0, 82                     # 'R'
+    li      a0, 82
     beq     t2, s0, print_face
     li      s4, 1
-    li      a0, 66                     # 'B'
+    li      a0, 66
     sub     t3, t2, s0
     beq     t3, t6, print_face
     li      s4, 2
-    li      a0, 68                     # 'D'
+    li      a0, 68
 print_face:
     li      a7, 11
     ecall
     lbu     t3, 20(s9)
     beqz    t3, print_drawn
-    li      a0, 50                     # '2'
+    li      a0, 50
     li      t2, 1
     beq     t3, t2, print_suffix
-    li      a0, 39                     # '\''
+    li      a0, 39
 print_suffix:
     ecall
 print_drawn:
@@ -282,7 +236,6 @@ print_newline:
     li      a7, 11
     ecall
 
-    # ---- length check against the stored exact distance (255 = skip) ----
     la      t0, vars
     lw      t0, 0(t0)
     lbu     t1, 14(t0)
@@ -322,21 +275,19 @@ exit:
     li      a7, 10
     ecall
 
-
     .data
-# every block below is a multiple of 4 bytes or is followed only by
-# smaller-aligned data, so no .align is needed
+
 frames:
     .zero 384
 input_state:
     .byte 50,49,51,52,53,54,55,49,49,49,49,49,49,49,255,0
 test_cases:
-    .byte 49,50,51,52,53,54,55,49,49,49,49,49,49,49,0,0    # 12345671111111, distance 0
-    .byte 50,52,49,55,51,53,54,50,51,50,50,49,51,51,3,0    # 24173562322133, distance 3
-    .byte 54,50,51,52,53,55,49,51,49,51,51,49,49,49,8,0    # 62345713133111, distance 8
-    .byte 50,53,52,49,54,51,55,51,51,51,49,49,49,49,10,0    # 25416373331111, distance 10
-    .byte 50,49,51,52,53,54,55,49,49,49,49,49,49,49,11,0    # 21345671111111, distance 11
-    .byte 53,52,55,50,49,54,51,49,49,49,49,49,49,49,11,0    # 54721631111111, distance 11
+    .byte 49,50,51,52,53,54,55,49,49,49,49,49,49,49,0,0
+    .byte 50,52,49,55,51,53,54,50,51,50,50,49,51,51,3,0
+    .byte 54,50,51,52,53,55,49,51,49,51,51,49,49,49,8,0
+    .byte 50,53,52,49,54,51,55,51,51,51,49,49,49,49,10,0
+    .byte 50,49,51,52,53,54,55,49,49,49,49,49,49,49,11,0
+    .byte 53,52,55,50,49,54,51,49,49,49,49,49,49,49,11,0
 vars:
     .word 0, 0, 0
 cur_p:
