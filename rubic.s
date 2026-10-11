@@ -24,8 +24,6 @@ parse_loop:
     addi    t3, t3, 1
     li      t4, 7
     blt     t3, t4, parse_loop
-
-    /* Lehmer permutation rank: p = p*(7-i) + smaller-to-right. */
     la      t0, cubie_p
     li      s0, 0
     li      t1, 0
@@ -86,8 +84,6 @@ rank_p_add:
     addi    t1, t1, 1
     li      t3, 7
     blt     t1, t3, rank_p_outer
-
-    /* Base-3 orientation rank over the first six corner orientations. */
     la      t0, cubie_o
     li      s1, 0
     li      t1, 0
@@ -100,8 +96,6 @@ rank_o_loop:
     addi    t1, t1, 1
     li      t4, 6
     blt     t1, t4, rank_o_loop
-
-    /* Non-recursive IDA*: next candidate move at each depth. */
     la      t0, perm_dist
     add     t1, t0, s0
     lbu     s2, 0(t1)
@@ -124,7 +118,6 @@ bound_loop:
     la      t0, depth_o
     sw      s1, 0(t0)
 search_node:
-    /* if depth exceeds 0, current node's parent path move is path[d-1]. */
     la      t0, next_move
     slli    t1, s3, 2
     add     t0, t0, t1
@@ -133,7 +126,6 @@ search_node:
     bge     t2, t3, backtrack
     addi    t4, t2, 1
     sw      t4, 0(t0)
-    /* Forbid two consecutive moves on same face. */
     beqz    s3, choose_move
     addi    t5, s3, -1
     la      t6, path
@@ -145,7 +137,6 @@ search_node:
     divu    t6, t2, t6
     beq     t5, t6, search_node
 choose_move:
-    /* candidate move m=face*3+turn. Apply that many quarter transitions. */
     la      t0, depth_p
     slli    t1, s3, 2
     add     t0, t0, t1
@@ -214,7 +205,6 @@ next_bound:
     addi    s2, s2, 1
     j       bound_loop
 found:
-    /* Print each move as its compact token (R/R2/R', B..., D...). */
     li      s3, 0
 print_loop:
     la      t0, path
