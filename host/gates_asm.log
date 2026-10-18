@@ -1,0 +1,5 @@
+truth: BFS on cubie model, 3674160 states, diameter 11, 2644 at distance 11 (2.8 s)
+H2: tables read from rubic.elf; 0 mismatches vs cubie model; perm_dist max=7 solved=0, orient_dist max=6 solved=0  -> PASS
+H1: 0 of 3674160 states with h > d (h == d on 0.5%)  -> PASS
+H3: 3674160 states executed on rubic.elf, 0 wrong, 2959 s wall (2 workers), mean 324059 retired  -> PASS
+distance 11: worst 54721631111111 12753391 retired, best 15746322313112 2817005 retired; 21345671111111: 4664552 -> d11_asm.txt
